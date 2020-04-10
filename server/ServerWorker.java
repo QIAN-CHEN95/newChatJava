@@ -6,6 +6,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.Socket;
+import java.util.List;
 
 public class ServerWorker extends Thread {
 
@@ -14,9 +15,17 @@ public class ServerWorker extends Thread {
     private InputStream inputStream;
     private boolean log=false;
     private String userName;
+    private Server server;
 
-    public ServerWorker(Socket clientSocket) {
+    public ServerWorker(Server server, Socket clientSocket) {
         this.clientSocket = clientSocket;
+        this.server=server;
+    }
+    public boolean getLog(){
+        return log;
+    }
+    public String getUserName(){
+        return userName;
     }
 
     @Override
@@ -59,11 +68,15 @@ public class ServerWorker extends Thread {
             //disconnect from server
 
             if(line.equals("quit")||line.equals("logoff")){
-                log=false;
-                clientSocket.close();
+                if (userName!=null) {
+                    echoLogOff();
+                }
+                break;
+
             }
             if (log==true){
-                outputStream.write((userName+" :111 "+line+"\r\n").getBytes());
+                String msg=userName+" : "+line+"\r\n";
+                echoChat(msg);
             }
             if (log==false) {
                 String[] token= line.split(" ");
@@ -75,12 +88,51 @@ public class ServerWorker extends Thread {
                         userName=token[1];
                         outputStream.write(("you have logged in as: "+ userName+ "\r\n").getBytes());
                         outputStream.write("you have joined chat room \r\n".getBytes());
+                        echoLogIn();
                     }
                 }
             }
         }
 
     }
+    private void echoLogIn() throws IOException {
+        List<ServerWorker> workerList= server.getWorkerList();
+        for (ServerWorker worker : workerList) {
+            //notification to other user
+            String msg=userName+" online \r\n";
+            if (!worker.getUserName().equals(userName)) {
+                worker.send(msg);
+            }
+            //already online
+            if ((worker.getLog()==true)&&(!worker.getUserName().equals(userName)) ) {
+                msg=worker.getUserName()+" online \r\n";
+                send(msg);
+            }
+        }
+    }
+    private void echoLogOff() throws IOException {
+        List<ServerWorker> workerList= server.getWorkerList();
+        for (ServerWorker worker : workerList) {
+            //notification to other user
+            String msg=userName+" offline \r\n";
+            if (!worker.getUserName().equals(userName)) {
+                worker.send(msg);
+            }
+        }
+    }
+
+
+    private void send(String msg) throws IOException {
+        outputStream.write(msg.getBytes());
+    }
+
+    private void echoChat(String msg) throws IOException{
+        List<ServerWorker> workerList= server.getWorkerList();
+        for (ServerWorker worker : workerList) {
+            worker.send(msg);
+        }
+    }
+
 
 
 }
